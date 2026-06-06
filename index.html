@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>M4A to MP3 변환기 (드래그 앤 드롭 지원)</title>
+    <title>M4A to MP3 변환기 (완성형)</title>
     
     <script src="https://unpkg.com/@ffmpeg/ffmpeg@0.12.6/dist/umd/ffmpeg.js"></script>
     <script src="https://unpkg.com/@ffmpeg/util@0.12.1/dist/umd/index.js"></script>
@@ -30,7 +30,7 @@
         h2 { margin-top: 0; color: #1a1a1a; font-size: 24px; }
         p { color: #666; font-size: 14px; margin-bottom: 25px; }
         
-        /* 드롭존 스타일링 */
+        /* 드롭존 및 파일 선택 영역 */
         .file-box {
             margin: 20px 0; 
             padding: 40px 20px;
@@ -38,29 +38,48 @@
             border-radius: 12px;
             background-color: #f8fafc; 
             transition: all 0.2s ease-in-out;
-            cursor: pointer;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 15px;
         }
-        /* 마우스로 파일을 영역 위에 올렸을 때의 스타일 */
         .file-box.dragover {
             border-color: #2563eb;
             background-color: #eff6ff;
             transform: scale(1.02);
         }
-        #fileLabel {
+        #fileInfo {
             color: #64748b;
             font-size: 14px;
             line-height: 1.6;
             word-break: break-all;
         }
         
-        button {
+        /* 명시적인 파일 불러오기 버튼 */
+        .browse-btn {
+            background-color: white;
+            color: #2563eb;
+            border: 1px solid #2563eb;
+            padding: 8px 16px;
+            font-size: 14px;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .browse-btn:hover {
+            background-color: #eff6ff;
+        }
+
+        /* 변환 시작 버튼 */
+        .convert-btn {
             background-color: #2563eb; color: white; border: none;
             padding: 14px; font-size: 16px; font-weight: bold;
             border-radius: 8px; cursor: pointer; transition: background-color 0.2s;
             width: 100%; margin-top: 10px;
         }
-        button:hover { background-color: #1d4ed8; }
-        button:disabled { background-color: #94a3b8; cursor: not-allowed; }
+        .convert-btn:hover { background-color: #1d4ed8; }
+        .convert-btn:disabled { background-color: #94a3b8; cursor: not-allowed; }
+        
         #status { margin-top: 20px; font-size: 14px; color: #475569; min-height: 20px; line-height: 1.5; }
         #downloadLink {
             display: inline-block; margin-top: 20px; text-decoration: none;
@@ -79,13 +98,17 @@
     
     <div class="file-box" id="dropZone">
         <input type="file" id="audioFile" accept=".m4a" style="display: none;">
-        <div id="fileLabel">
-            📂 <strong>M4A 파일을 여기로 드래그하세요</strong><br>
-            <span style="font-size: 12px; color: #94a3b8;">또는 영역을 클릭하여 파일 선택</span>
+        
+        <div id="fileInfo">
+            📂 <strong>M4A 파일을 이곳으로 끌어오세요</strong>
         </div>
+        
+        <button class="browse-btn" onclick="document.getElementById('audioFile').click()">
+            컴퓨터에서 파일 불러오기
+        </button>
     </div>
     
-    <button id="convertBtn">MP3로 변환 시작</button>
+    <button id="convertBtn" class="convert-btn">MP3로 변환 시작</button>
     
     <div id="status">파일을 선택하고 변환 버튼을 눌러주세요.</div>
     <a id="downloadLink" style="display: none;">📥 변환된 MP3 다운로드</a>
@@ -96,66 +119,76 @@
     const { fetchFile } = window.FFmpegUtil;
     
     let ffmpeg = null;
+    let selectedFile = null; // 선택된 파일을 명시적으로 저장할 변수 (버그 해결의 핵심)
 
     const dropZone = document.getElementById('dropZone');
     const fileInput = document.getElementById('audioFile');
-    const fileLabel = document.getElementById('fileLabel');
+    const fileInfo = document.getElementById('fileInfo');
     const convertBtn = document.getElementById('convertBtn');
     const statusDiv = document.getElementById('status');
     const downloadLink = document.getElementById('downloadLink');
 
-    // 1. 드롭존 클릭 시 숨겨진 파일 인풋 실행
-    dropZone.addEventListener('click', () => fileInput.click());
+    // --- 1. 파일 선택 및 드래그 앤 드롭 이벤트 처리 --- //
 
-    // 2. 일반 파일 선택 창을 통해 파일이 바뀐 경우 처리
-    fileInput.addEventListener('change', () => {
-        handleFileSelection(fileInput.files);
+    // 사용자가 버튼을 눌러 파일을 선택했을 때
+    fileInput.addEventListener('change', (e) => {
+        if (e.target.files.length > 0) {
+            handleFile(e.target.files[0]);
+        }
     });
 
-    // 3. 드래그 레이아웃 이벤트 처리
-    dropZone.addEventListener('dragover', (e) => {
-        e.preventDefault(); // 기본 브라우저 파일 열기 방지
+    // 화면에 파일이 들어왔을 때 (브라우저가 파일을 여는 것 방지)
+    dropZone.addEventListener('dragenter', (e) => {
+        e.preventDefault();
         dropZone.classList.add('dragover');
     });
 
-    dropZone.addEventListener('dragleave', () => {
+    dropZone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        dropZone.classList.add('dragover');
+    });
+
+    dropZone.addEventListener('dragleave', (e) => {
+        e.preventDefault();
         dropZone.classList.remove('dragover');
     });
 
-    // 4. 파일을 떨어뜨렸을 때(Drop) 처리
+    // 영역에 파일을 떨어뜨렸을 때
     dropZone.addEventListener('drop', (e) => {
         e.preventDefault();
         dropZone.classList.remove('dragover');
         
-        const droppedFiles = e.dataTransfer.files;
-        if (droppedFiles.length > 0) {
-            // 인풋 데이터에 드롭된 파일 할당
-            fileInput.files = droppedFiles; 
-            handleFileSelection(droppedFiles);
+        if (e.dataTransfer.files.length > 0) {
+            handleFile(e.dataTransfer.files[0]); // 드롭된 파일을 직접 전달
         }
     });
 
-    // 파일 유효성 검사 및 화면 표시 업데이트
-    function handleFileSelection(files) {
-        if (files.length === 0) return;
-        
-        const file = files[0];
+    // 파일 유효성 검사 및 화면 업데이트 함수
+    function handleFile(file) {
         if (!file.name.toLowerCase().endsWith('.m4a')) {
             alert('M4A 형식의 파일만 지원합니다.');
-            fileInput.value = ''; // 선택 초기화
-            fileLabel.innerHTML = `📂 <strong>M4A 파일을 여기로 드래그하세요</strong><br><span style="font-size: 12px; color: #94a3b8;">또는 영역을 클릭하여 파일 선택</span>`;
-            statusDiv.innerHTML = "M4A 파일이 아닙니다.";
+            selectedFile = null;
+            fileInfo.innerHTML = `📂 <strong>M4A 파일을 이곳으로 끌어오세요</strong>`;
+            statusDiv.innerHTML = "❌ M4A 파일이 아닙니다.";
             return;
         }
 
-        // 파일 정보 표시 (MB 단위 변환)
+        selectedFile = file; // 변환 시 사용할 수 있도록 변수에 저장
         const fileSizeMB = (file.size / (1024 * 1024)).toFixed(2);
-        fileLabel.innerHTML = `📄 <strong>선택된 파일:</strong><br>${file.name}<br><span style="font-size: 12px; color: #2563eb; font-weight: bold;">(${fileSizeMB} MB)</span>`;
-        statusDiv.innerHTML = "변환 준비 완료! '변환 시작' 버튼을 누르세요.";
+        
+        // 화면에 선택된 파일 정보 표시
+        fileInfo.innerHTML = `
+            📄 <strong>선택된 파일:</strong><br>
+            ${file.name}<br>
+            <span style="font-size: 12px; color: #2563eb; font-weight: bold;">(${fileSizeMB} MB)</span>
+        `;
+        statusDiv.innerHTML = "✅ 변환 준비 완료! '변환 시작' 버튼을 누르세요.";
         downloadLink.style.display = 'none';
     }
 
-    // FFmpeg 엔진 초기화
+
+    // --- 2. FFmpeg 변환 로직 --- //
+
     async function initFFmpeg() {
         if (ffmpeg) return;
         ffmpeg = new FFmpeg();
@@ -167,34 +200,37 @@
         });
     }
 
-    // 변환 버튼 클릭 이벤트 (기존 로직 유지)
     convertBtn.addEventListener('click', async () => {
-        const files = fileInput.files;
-        if (files.length === 0) {
+        // fileInput.files 대신 명시적으로 저장한 selectedFile 변수 사용
+        if (!selectedFile) {
             alert('M4A 파일을 먼저 추가해주세요.');
             return;
         }
 
-        const file = files[0];
-
         try {
             convertBtn.disabled = true;
             downloadLink.style.display = 'none';
-            statusDiv.innerHTML = "엔진 로딩 중... ⏳<br>(최초 실행 시에만 몇 초간 다운로드 시간이 소요됩니다)";
+            statusDiv.innerHTML = "엔진 로딩 중... ⏳<br>(최초 실행 시에만 다운로드 시간이 소요됩니다)";
 
             await initFFmpeg();
 
             statusDiv.innerHTML = "오디오 변환 중입니다. 잠시만 기다려주세요... ⚙️";
 
-            await ffmpeg.writeFile('input.m4a', await fetchFile(file));
+            // 가상 파일 시스템에 파일 쓰기 (selectedFile 사용)
+            await ffmpeg.writeFile('input.m4a', await fetchFile(selectedFile));
+            
+            // 변환 실행
             await ffmpeg.exec(['-i', 'input.m4a', 'output.mp3']);
 
             statusDiv.innerHTML = "파일 처리 완료! 다운로드 링크를 생성합니다... 📄";
 
+            // 변환된 파일 가져오기
             const data = await ffmpeg.readFile('output.mp3');
             const blob = new Blob([data.buffer], { type: 'audio/mp3' });
             const url = URL.createObjectURL(blob);
-            const outputName = file.name.replace(/\.[^/.]+$/, "") + ".mp3";
+            
+            // 원본 파일명 유지하며 확장자만 변경
+            const outputName = selectedFile.name.replace(/\.[^/.]+$/, "") + ".mp3";
 
             downloadLink.href = url;
             downloadLink.download = outputName;
