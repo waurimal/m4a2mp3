@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>M4A to MP3 변환기</title>
+    <title>M4A to MP3 변환기 (안정성 강화)</title>
     
     <script src="https://unpkg.com/@ffmpeg/ffmpeg@0.12.6/dist/umd/ffmpeg.js"></script>
     <script src="https://unpkg.com/@ffmpeg/util@0.12.1/dist/umd/index.js"></script>
@@ -110,10 +110,7 @@
 </div>
 
 <script>
-    // ❗ 가장 중요한 수정 부분: window.FFmpegWASM 을 사용해야 정상 작동합니다.
-    const { FFmpeg } = window.FFmpegWASM; 
-    const { fetchFile } = window.FFmpegUtil;
-    
+    // 전역 변수 설정 (라이브러리 로딩은 나중으로 미룸)
     let ffmpeg = null;
     let selectedFile = null;
 
@@ -125,30 +122,24 @@
     const statusDiv = document.getElementById('status');
     const downloadLink = document.getElementById('downloadLink');
 
-    // --- 1. 파일 선택 및 드래그 앤 드롭 이벤트 --- //
+    // --- 1. 파일 UI 로직 (라이브러리 오류와 무관하게 100% 작동) ---
 
-    // '찾아보기' 버튼 클릭 시
     browseBtn.addEventListener('click', () => {
-        fileInput.value = ''; // 이전 선택 기록 지우기 (동일 파일 재선택 시 씹힘 방지)
+        fileInput.value = ''; // 중복 선택 버그 방지
         fileInput.click();
     });
 
     fileInput.addEventListener('change', (e) => {
-        if (e.target.files.length > 0) {
-            handleFile(e.target.files[0]);
-        }
+        if (e.target.files.length > 0) handleFile(e.target.files[0]);
     });
 
-    // 드래그 앤 드롭 효과 (브라우저 기본 동작 완벽 차단)
+    // 화면 밖 드래그 앤 드롭 차단
     ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
         dropZone.addEventListener(eventName, preventDefaults, false);
         document.body.addEventListener(eventName, preventDefaults, false);
     });
 
-    function preventDefaults (e) {
-        e.preventDefault();
-        e.stopPropagation();
-    }
+    function preventDefaults(e) { e.preventDefault(); e.stopPropagation(); }
 
     ['dragenter', 'dragover'].forEach(eventName => {
         dropZone.addEventListener(eventName, () => dropZone.classList.add('dragover'), false);
@@ -158,16 +149,10 @@
         dropZone.addEventListener(eventName, () => dropZone.classList.remove('dragover'), false);
     });
 
-    // 파일 드롭 시
     dropZone.addEventListener('drop', (e) => {
-        const dt = e.dataTransfer;
-        const files = dt.files;
-        if (files.length > 0) {
-            handleFile(files[0]);
-        }
+        if (e.dataTransfer.files.length > 0) handleFile(e.dataTransfer.files[0]);
     });
 
-    // 파일 처리 공통 함수
     function handleFile(file) {
         if (!file.name.toLowerCase().endsWith('.m4a')) {
             alert('M4A 형식의 파일만 지원합니다.');
@@ -189,12 +174,22 @@
         downloadLink.style.display = 'none';
     }
 
-
-    // --- 2. 오디오 변환 로직 --- //
+    // --- 2. 오디오 변환 로직 (버튼을 눌렀을 때만 실행) ---
 
     async function initFFmpeg() {
-        if (ffmpeg) return;
-        ffmpeg = new FFmpeg();
+        if (ffmpeg) return; // 이미 로딩되어 있으면 패스
+
+        // 라이브러리 전역 변수를 동적으로 찾아서 충돌 에러 방지
+        let FFmpegClass = null;
+        if (typeof window.FFmpegWASM !== 'undefined' && window.FFmpegWASM.FFmpeg) {
+            FFmpegClass = window.FFmpegWASM.FFmpeg;
+        } else if (typeof window.FFmpeg !== 'undefined' && window.FFmpeg.FFmpeg) {
+            FFmpegClass = window.FFmpeg.FFmpeg;
+        } else {
+            throw new Error("CDN에서 FFmpeg 스크립트를 가져오지 못했습니다.");
+        }
+
+        ffmpeg = new FFmpegClass();
         
         const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd';
         await ffmpeg.load({
@@ -212,13 +207,17 @@
         try {
             convertBtn.disabled = true;
             downloadLink.style.display = 'none';
-            statusDiv.innerHTML = "엔진 로딩 중... ⏳";
+            statusDiv.innerHTML = "엔진 로딩 중... ⏳ (최초 실행 시 5~10초 소요될 수 있습니다)";
 
             await initFFmpeg();
 
+            // fetchFile 유틸리티 동적 참조
+            const fetchFileFn = window.FFmpegUtil ? window.FFmpegUtil.fetchFile : null;
+            if (!fetchFileFn) throw new Error("FFmpeg 유틸리티를 로드할 수 없습니다.");
+
             statusDiv.innerHTML = "오디오 변환 중입니다. 잠시만 기다려주세요... ⚙️";
 
-            await ffmpeg.writeFile('input.m4a', await fetchFile(selectedFile));
+            await ffmpeg.writeFile('input.m4a', await fetchFileFn(selectedFile));
             await ffmpeg.exec(['-i', 'input.m4a', 'output.mp3']);
 
             statusDiv.innerHTML = "파일 처리 완료! 다운로드 링크를 생성합니다... 📄";
@@ -236,7 +235,8 @@
 
         } catch (error) {
             console.error("FFmpeg Error:", error);
-            statusDiv.innerHTML = "❌ 변환 중 오류가 발생했습니다.<br>브라우저 개발자 도구의 콘솔(Console)을 확인해주세요.";
+            // 에러 내용을 화면에 띄워 문제 원인을 직관적으로 파악할 수 있게 개선
+            statusDiv.innerHTML = `❌ 변환 중 오류 발생: <span style="color:red; font-size:12px;">${error.message}</span>`;
         } finally {
             convertBtn.disabled = false;
         }
