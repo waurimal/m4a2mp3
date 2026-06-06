@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>M4A to MP3 변환기 (보안 정책 우회 버전)</title>
+    <title>M4A to MP3 변환기 (완성판)</title>
     
     <script src="https://unpkg.com/@ffmpeg/ffmpeg@0.12.6/dist/umd/ffmpeg.js"></script>
     <script src="https://unpkg.com/@ffmpeg/util@0.12.1/dist/umd/index.js"></script>
@@ -31,56 +31,34 @@
         p { color: #666; font-size: 14px; margin-bottom: 25px; }
         
         .file-box {
-            margin: 20px 0; 
-            padding: 40px 20px;
-            border: 2px dashed #cbd5e1; 
-            border-radius: 12px;
-            background-color: #f8fafc; 
-            transition: all 0.2s ease-in-out;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 15px;
+            margin: 20px 0; padding: 40px 20px; border: 2px dashed #cbd5e1; 
+            border-radius: 12px; background-color: #f8fafc; 
+            transition: all 0.2s ease-in-out; display: flex; flex-direction: column;
+            align-items: center; gap: 15px;
         }
-        .file-box.dragover {
-            border-color: #2563eb;
-            background-color: #eff6ff;
-            transform: scale(1.02);
-        }
-        #fileInfo {
-            color: #64748b;
-            font-size: 14px;
-            line-height: 1.6;
-            word-break: break-all;
-        }
+        .file-box.dragover { border-color: #2563eb; background-color: #eff6ff; transform: scale(1.02); }
+        #fileInfo { color: #64748b; font-size: 14px; line-height: 1.6; word-break: break-all; }
         
         .browse-btn {
-            background-color: white;
-            color: #2563eb;
-            border: 1px solid #2563eb;
-            padding: 8px 16px;
-            font-size: 14px;
-            border-radius: 6px;
-            cursor: pointer;
+            background-color: white; color: #2563eb; border: 1px solid #2563eb;
+            padding: 8px 16px; font-size: 14px; border-radius: 6px; cursor: pointer;
             transition: all 0.2s;
         }
         .browse-btn:hover { background-color: #eff6ff; }
 
         .convert-btn {
-            background-color: #2563eb; color: white; border: none;
-            padding: 14px; font-size: 16px; font-weight: bold;
-            border-radius: 8px; cursor: pointer; transition: background-color 0.2s;
-            width: 100%; margin-top: 10px;
+            background-color: #2563eb; color: white; border: none; padding: 14px; 
+            font-size: 16px; font-weight: bold; border-radius: 8px; cursor: pointer; 
+            width: 100%; margin-top: 10px; transition: background-color 0.2s;
         }
         .convert-btn:hover { background-color: #1d4ed8; }
         .convert-btn:disabled { background-color: #94a3b8; cursor: not-allowed; }
         
         #status { margin-top: 20px; font-size: 14px; color: #475569; min-height: 20px; line-height: 1.5; }
         #downloadLink {
-            display: inline-block; margin-top: 20px; text-decoration: none;
-            color: white; background-color: #10b981; padding: 12px 24px;
-            font-weight: bold; border-radius: 8px; width: calc(100% - 48px);
-            transition: background-color 0.2s;
+            display: inline-block; margin-top: 20px; text-decoration: none; color: white; 
+            background-color: #10b981; padding: 12px 24px; font-weight: bold; 
+            border-radius: 8px; width: calc(100% - 48px); transition: background-color 0.2s;
         }
         #downloadLink:hover { background-color: #059669; }
     </style>
@@ -93,14 +71,8 @@
     
     <div class="file-box" id="dropZone">
         <input type="file" id="audioFile" accept=".m4a" style="display: none;">
-        
-        <div id="fileInfo">
-            📂 <strong>M4A 파일을 이곳으로 끌어오세요</strong>
-        </div>
-        
-        <button class="browse-btn" id="browseBtn">
-            컴퓨터에서 파일 불러오기
-        </button>
+        <div id="fileInfo">📂 <strong>M4A 파일을 이곳으로 끌어오세요</strong></div>
+        <button class="browse-btn" id="browseBtn">컴퓨터에서 파일 불러오기</button>
     </div>
     
     <button id="convertBtn" class="convert-btn">MP3로 변환 시작</button>
@@ -121,31 +93,18 @@
     const statusDiv = document.getElementById('status');
     const downloadLink = document.getElementById('downloadLink');
 
-    // --- 1. 파일 UI 로직 (정상 작동 확인됨) ---
+    // --- 1. 파일 UI 및 드래그 로직 ---
+    browseBtn.addEventListener('click', () => { fileInput.value = ''; fileInput.click(); });
+    fileInput.addEventListener('change', (e) => { if (e.target.files.length > 0) handleFile(e.target.files[0]); });
 
-    browseBtn.addEventListener('click', () => {
-        fileInput.value = ''; 
-        fileInput.click();
-    });
-
-    fileInput.addEventListener('change', (e) => {
-        if (e.target.files.length > 0) handleFile(e.target.files[0]);
-    });
-
-    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
-        dropZone.addEventListener(eventName, preventDefaults, false);
-        document.body.addEventListener(eventName, preventDefaults, false);
+    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(e => {
+        dropZone.addEventListener(e, preventDefaults, false);
+        document.body.addEventListener(e, preventDefaults, false);
     });
 
     function preventDefaults(e) { e.preventDefault(); e.stopPropagation(); }
-
-    ['dragenter', 'dragover'].forEach(eventName => {
-        dropZone.addEventListener(eventName, () => dropZone.classList.add('dragover'), false);
-    });
-
-    ['dragleave', 'drop'].forEach(eventName => {
-        dropZone.addEventListener(eventName, () => dropZone.classList.remove('dragover'), false);
-    });
+    ['dragenter', 'dragover'].forEach(e => dropZone.addEventListener(e, () => dropZone.classList.add('dragover'), false));
+    ['dragleave', 'drop'].forEach(e => dropZone.addEventListener(e, () => dropZone.classList.remove('dragover'), false));
 
     dropZone.addEventListener('drop', (e) => {
         if (e.dataTransfer.files.length > 0) handleFile(e.dataTransfer.files[0]);
@@ -159,45 +118,51 @@
             statusDiv.innerHTML = "❌ M4A 파일이 아닙니다.";
             return;
         }
-
         selectedFile = file;
         const fileSizeMB = (file.size / (1024 * 1024)).toFixed(2);
-        
-        fileInfo.innerHTML = `
-            📄 <strong>선택된 파일:</strong><br>
-            ${file.name}<br>
-            <span style="font-size: 12px; color: #2563eb; font-weight: bold;">(${fileSizeMB} MB)</span>
-        `;
+        fileInfo.innerHTML = `📄 <strong>선택된 파일:</strong><br>${file.name}<br><span style="font-size: 12px; color: #2563eb; font-weight: bold;">(${fileSizeMB} MB)</span>`;
         statusDiv.innerHTML = "✅ 변환 준비 완료! '변환 시작' 버튼을 누르세요.";
         downloadLink.style.display = 'none';
     }
 
-    // --- 2. 오디오 변환 로직 (CORS 워커 차단 해결) ---
-
+    // --- 2. 오디오 변환 및 설치 로직 ---
     async function initFFmpeg() {
-        if (ffmpeg) return;
+        // 이미 완벽하게 설치되었다면 이 과정을 생략 (중복 에러 방지)
+        if (ffmpeg && ffmpeg.loaded) return;
 
-        let FFmpegClass = null;
-        if (typeof window.FFmpegWASM !== 'undefined' && window.FFmpegWASM.FFmpeg) {
-            FFmpegClass = window.FFmpegWASM.FFmpeg;
-        } else if (typeof window.FFmpeg !== 'undefined' && window.FFmpeg.FFmpeg) {
-            FFmpegClass = window.FFmpeg.FFmpeg;
-        } else {
-            throw new Error("CDN에서 FFmpeg 스크립트를 가져오지 못했습니다.");
+        try {
+            let FFmpegClass = window.FFmpegWASM?.FFmpeg || window.FFmpeg?.FFmpeg;
+            ffmpeg = new FFmpegClass();
+            
+            // F12 개발자 도구의 콘솔 창에 진행 상황을 기록
+            ffmpeg.on('log', ({ message }) => console.log('[FFmpeg]', message));
+
+            const { toBlobURL } = window.FFmpegUtil;
+            const coreURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd';
+            const ffmpegURL = 'https://unpkg.com/@ffmpeg/ffmpeg@0.12.6/dist/umd';
+
+            // 각각의 파일이 정상적으로 다운로드되는지 화면에 표시
+            statusDiv.innerHTML = "보안 환경 구성 중 (1/3) 다운로드 ... ⏳";
+            const cURL = await toBlobURL(`${coreURL}/ffmpeg-core.js`, 'text/javascript');
+            
+            statusDiv.innerHTML = "보안 환경 구성 중 (2/3) 다운로드 ... ⏳";
+            const wURL = await toBlobURL(`${coreURL}/ffmpeg-core.wasm`, 'application/wasm');
+            
+            statusDiv.innerHTML = "보안 환경 구성 중 (3/3) 다운로드 ... ⏳";
+            const workerURL = await toBlobURL(`${ffmpegURL}/814.ffmpeg.js`, 'text/javascript');
+
+            statusDiv.innerHTML = "엔진을 브라우저에 장착 중... ⚙️";
+            await ffmpeg.load({
+                coreURL: cURL,
+                wasmURL: wURL,
+                classWorkerURL: workerURL
+            });
+            
+        } catch (error) {
+            // 설치 중간에 뻑이 나면 찌꺼기가 남지 않게 깨끗이 비워줌 (다음 클릭 시 재시도 가능)
+            ffmpeg = null; 
+            throw error;
         }
-
-        ffmpeg = new FFmpegClass();
-        
-        // 💡 핵심 해결 코드: toBlobURL을 사용하여 외부 워커 스크립트를 내부망(Blob)처럼 속여서 로드합니다.
-        const { toBlobURL } = window.FFmpegUtil;
-        const coreURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd';
-        const ffmpegURL = 'https://unpkg.com/@ffmpeg/ffmpeg@0.12.6/dist/umd';
-
-        await ffmpeg.load({
-            coreURL: await toBlobURL(`${coreURL}/ffmpeg-core.js`, 'text/javascript'),
-            wasmURL: await toBlobURL(`${coreURL}/ffmpeg-core.wasm`, 'application/wasm'),
-            classWorkerURL: await toBlobURL(`${ffmpegURL}/814.ffmpeg.js`, 'text/javascript')
-        });
     }
 
     convertBtn.addEventListener('click', async () => {
@@ -209,13 +174,11 @@
         try {
             convertBtn.disabled = true;
             downloadLink.style.display = 'none';
-            statusDiv.innerHTML = "엔진을 브라우저에 설치 중... ⏳ (최초 실행 시 5~10초 소요)";
-
-            await initFFmpeg();
-
-            const fetchFileFn = window.FFmpegUtil.fetchFile;
             
+            await initFFmpeg(); // 여기서 에러가 나면 아래 코드는 실행되지 않음
+
             statusDiv.innerHTML = "오디오 변환 중입니다. 잠시만 기다려주세요... ⚙️";
+            const fetchFileFn = window.FFmpegUtil.fetchFile;
 
             await ffmpeg.writeFile('input.m4a', await fetchFileFn(selectedFile));
             await ffmpeg.exec(['-i', 'input.m4a', 'output.mp3']);
@@ -235,7 +198,8 @@
 
         } catch (error) {
             console.error("FFmpeg Error:", error);
-            statusDiv.innerHTML = `❌ 변환 중 오류 발생: <span style="color:red; font-size:12px;">${error.message}</span>`;
+            // 에러 발생 시 진행 단계를 텍스트로 보여주어 원인 파악
+            statusDiv.innerHTML = `❌ 오류 발생: <br><span style="color:red; font-size:12px;">${error.message}</span>`;
         } finally {
             convertBtn.disabled = false;
         }
